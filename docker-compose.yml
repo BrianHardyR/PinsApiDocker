@@ -1,0 +1,101 @@
+version: "3"
+
+services:
+  neo4j:
+    image: neo4j:4.1.4
+    restart: unless-stopped
+    ports:
+      - 7474:7474
+      - 7687:7687
+    volumes:
+      - conf:/conf
+      - data:/data
+      - import:/import
+      - logs:/logs
+      - plugins:/plugins
+    environment:
+      - NEO4J_AUTH:'neo4j:root'
+      # Raise memory limits
+      - NEO4J_dbms_memory_pagecache_size=1G
+      - NEO4J_dbms.memory.heap.initial_size=1G
+      - NEO4J_dbms_memory_heap_max__size=1G
+      
+  db:
+      image: mariadb:10.5
+      restart: always
+      environment:
+        - MYSQL_DATABASE=photoview
+        - MYSQL_USER=photoview
+        - MYSQL_PASSWORD=photosecret
+        - MYSQL_RANDOM_ROOT_PASSWORD=1
+      volumes:
+        - db_data:/var/lib/mysql
+      ports:
+        - "3306:3306"
+  
+  api:
+    build: ./api/
+    restart : always
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+    depends_on:
+      - neo4j
+      - db
+    volumes:
+      - uploads:/uploads
+      - processed:/processed
+    environment:
+      - NEO4J_URL=bolt://neo4j:7687
+      - UPLOAD_DIR=/uploads
+      - PROCESSED_DIR=/processed
+      - JOB_DB=jdbc:mysql://db:3306/photoview
+      - JOB_USER=photoview
+      - JOB_PASSWORD=photosecret
+      - JOB_DASHBOARD=8081
+      - JOB_WORKERS=1
+
+  photoview:
+    image: viktorstrate/photoview:2
+    restart: always
+    ports:
+      - "8001:80"
+    depends_on:
+      - db
+
+    environment:
+      - PHOTOVIEW_DATABASE_DRIVER=mysql
+      - PHOTOVIEW_MYSQL_URL=photoview:photosecret@tcp(db)/photoview
+      - PHOTOVIEW_LISTEN_IP=photoview
+      - PHOTOVIEW_LISTEN_PORT=80
+      - PHOTOVIEW_MEDIA_CACHE=/app/cache
+      
+      # Optional: If you are using Samba/CIFS-Share and experience problems with "directory not found"
+      # Enable the following Godebug
+      # - GODEBUG=asyncpreemptoff=1
+      
+      
+      # Optional: To enable map related features, you need to create a mapbox token.
+      # A token can be generated for free here https://account.mapbox.com/access-tokens/
+      # It's a good idea to limit the scope of the token to your own domain, to prevent others from using it.
+      # - MAPBOX_TOKEN=<YOUR TOKEN HERE>
+
+    volumes:
+      - api_cache:/app/cache
+
+      # Change This: to the directory where your photos are located on your server.
+      # If the photos are located at `/home/user/photos`, then change this value
+      # to the following: `/home/user/photos:/photos:ro`.
+      # You can mount multiple paths, if your photos are spread across multiple directories.
+      - uploads:/photos:ro
+
+volumes:
+  db_data:
+  api_cache:
+  conf:
+  data:
+  import:
+  logs:
+  plugins:
+  uploads:
+  processed:
