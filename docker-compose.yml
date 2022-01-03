@@ -35,6 +35,8 @@ services:
   
   api:
     build: ./api/
+    image : pins_api:version_1
+    container_name : pins_api
     restart : always
     ports:
       - "8080:8080"
